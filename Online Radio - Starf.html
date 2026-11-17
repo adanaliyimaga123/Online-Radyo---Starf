@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Türkiye Radyoları</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+  :root {
+    --accent: #d84315;
+    --accent-contrast: #ffffff;
+    --bg: #000000;
+    --card: #000000;
+    --item: #0a0a0a;
+    --text: #ffffff;
+    --subtext: #9e9e9e;
+    --border-subtle: rgba(255, 255, 255, 0.1);
+  }
+  body.light {
+    --bg: #f4f4f6;
+    --card: #ffffff;
+    --item: #f0f0f3;
+    --text: #1a1a1a;
+    --subtext: #666666;
+    --border-subtle: rgba(0, 0, 0, 0.08);
+  }
+  * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; transition: background 0.2s, color 0.2s; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 0;
+  }
+  .app-container {
+    background: var(--card); width: 100vw; height: 100vh; max-width: 100%; max-height: 100vh;
+    padding: 16px 20px; border-radius: 0; box-shadow: none;
+    border: none; display: flex; flex-direction: column; gap: 12px; position: relative; overflow: hidden;
+  }
+  @media (min-width: 768px) {
+    .app-container {
+      max-width: 540px; height: 96vh; border-radius: 28px;
+      border: 1.5px solid color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+      box-shadow: 0 25px 60px rgba(0,0,0,0.9); padding: 20px;
+    }
+  }
+
+  .ambient-bg {
+    position: absolute; inset: -20px; pointer-events: none; z-index: 0; opacity: 0;
+    transition: opacity 0.6s ease, background 0.5s ease; filter: blur(70px); transform: scale(1.3);
+    will-change: opacity;
+  }
+  .ambient-bg.active { opacity: 0.28; animation: ambientPulse 8s infinite alternate ease-in-out; }
+  @keyframes ambientPulse {
+    0% { transform: scale(1.25) translate(0, 0); }
+    50% { transform: scale(1.35) translate(10px, -10px); }
+    100% { transform: scale(1.25) translate(-10px, 10px); }
+  }
+
+  .header, .quick-favs-container, .search-box, .pills-row, .tabs, .station-list, .now-playing, .modal-overlay {
+    position: relative; z-index: 2;
+  }
+
+  .header { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .header h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 8px; }
+  .header-actions { display: flex; gap: 8px; }
+  .icon-btn {
+    background: color-mix(in srgb, var(--accent) 16%, var(--item));
+    border: 1px solid var(--border-subtle); color: var(--accent); width: 38px; height: 38px; border-radius: 50%;
+    cursor: pointer; font-size: 15px; display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.2s;
+  }
+  .icon-btn:hover { background: color-mix(in srgb, var(--accent) 28%, var(--item)); transform: scale(1.08); }
+  .icon-btn:active { transform: scale(0.92); }
+
+  .quick-favs-container {
+    max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.1, 1, 0.1, 1), opacity 0.3s;
+    opacity: 0; flex-shrink: 0;
+  }
+  .quick-favs-container.open { max-height: 90px; opacity: 1; }
+  .quick-favs {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px; scrollbar-width: none;
+  }
+  .quick-favs::-webkit-scrollbar { display: none; }
+  .qf-item {
+    display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; flex-shrink: 0; width: 50px;
+  }
+  .qf-avatar {
+    width: 42px; height: 42px; border-radius: 14px; object-fit: cover;
+    background: var(--item); border: 1.5px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: center; font-size: 18px;
+  }
+  .qf-item.active .qf-avatar { border-color: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .qf-name { font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; text-align: center; color: var(--subtext); }
+  .qf-item.active .qf-name { color: var(--accent); font-weight: bold; }
+
+  .search-box {
+    width: 100%; padding: 10px 14px; border-radius: 18px; border: 1px solid var(--border-subtle);
+    background: var(--item); color: var(--text); font-size: 13px; outline: none; flex-shrink: 0;
+  }
+  .search-box:focus { border-color: var(--accent); }
+  .pills-row {
+    display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; flex-shrink: 0;
+  }
+  .pills-row::-webkit-scrollbar { display: none; }
+  .pill {
+    padding: 5px 12px; border-radius: 14px; border: 1px solid var(--border-subtle); cursor: pointer; white-space: nowrap;
+    background: var(--item); color: var(--subtext); font-size: 11.5px; font-weight: 600;
+  }
+  .pill.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+
+  .tabs { display: flex; gap: 8px; flex-shrink: 0; }
+  .tab {
+    flex: 1; padding: 7px; border-radius: 14px; border: 1px solid var(--border-subtle); cursor: pointer;
+    background: var(--item); color: var(--subtext); font-weight: 600; font-size: 11.5px; text-align: center;
+  }
+  .tab.active { background: color-mix(in srgb, var(--accent) 20%, var(--item)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+  .station-list {
+    overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+    padding-right: 4px; flex: 1; min-height: 0;
+  }
+  .station-list::-webkit-scrollbar { width: 4px; }
+  .station-list::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 10px; }
+  .station-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--item); border: 1px solid var(--border-subtle); padding: 9px 12px; border-radius: 18px; cursor: pointer;
+    transition: transform 0.1s, background 0.2s, border-color 0.2s;
+  }
+  .station-item:hover { background: color-mix(in srgb, var(--accent) 14%, var(--item)); }
+  .station-item.active { border: 1.5px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--item)); }
+  .station-item.dead { opacity: 0.55; }
+  .st-avatar {
+    width: 38px; height: 38px; border-radius: 12px; object-fit: cover;
+    background: color-mix(in srgb, var(--accent) 14%, var(--card));
+    border: 1px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+  }
+  .station-info { text-align: left; overflow: hidden; flex: 1; }
+  .station-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .station-genre { font-size: 10.5px; color: var(--subtext); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  .fav-btn {
+    background: color-mix(in srgb, var(--accent) 12%, var(--card));
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+    color: var(--accent);
+    width: 34px; height: 34px; border-radius: 50%;
+    font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: transform 0.2s, background 0.2s;
+  }
+  .fav-btn:hover { background: color-mix(in srgb, var(--accent) 25%, var(--card)); transform: scale(1.1); }
+  .fav-btn:active { transform: scale(0.9); }
+
+  .now-playing {
+    background: color-mix(in srgb, var(--accent) 10%, var(--item));
+    padding: 16px; border-radius: 24px; text-align: center; flex-shrink: 0;
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-subtle));
+    position: relative; overflow: hidden;
+  }
+  .np-top { display: flex; align-items: center; gap: 12px; text-align: left; margin-bottom: 10px; position: relative; z-index: 2; }
+  .np-logo {
+    width: 52px; height: 52px; border-radius: 16px; object-fit: cover;
+    background: color-mix(in srgb, var(--accent) 18%, var(--card));
+    border: 1px solid var(--border-subtle);
+    display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;
+  }
+  .np-meta { overflow: hidden; flex: 1; }
+  .station-title { font-size: 17px; font-weight: bold; margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .song-subtitle { font-size: 12px; color: var(--accent); font-weight: 600; margin: 0 0 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: none; }
+  .song-subtitle.active { display: block; }
+  .station-tag { font-size: 11px; color: var(--subtext); display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 600;
+    background: color-mix(in srgb, var(--accent) 22%, var(--card)); color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+
+  .visualizer {
+    display: none; align-items: flex-end; gap: 3px; height: 16px; margin-left: auto;
+  }
+  .visualizer.active { display: flex; }
+  .bar { width: 3px; background: var(--accent); border-radius: 2px; animation: bounce 0.8s infinite ease-in-out alternate; }
+  .bar:nth-child(2) { animation-delay: 0.2s; }
+  .bar:nth-child(3) { animation-delay: 0.4s; }
+  .bar:nth-child(4) { animation-delay: 0.1s; }
+  @keyframes bounce {
+    0% { height: 4px; }
+    100% { height: 16px; }
+  }
+
+  .controls { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; z-index: 2; }
+  .ctrl-sub {
+    background: var(--card); border: 1px solid var(--border-subtle); color: var(--text);
+    width: 38px; height: 38px; border-radius: 14px; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center; transition: transform 0.15s, border-color 0.2s;
+  }
+  .ctrl-sub:hover { border-color: var(--accent); transform: scale(1.04); }
+  .ctrl-sub:active { transform: scale(0.92); }
+  .play-btn {
+    width: 52px; height: 52px; border-radius: 18px; border: none;
+    background: var(--accent); color: var(--accent-contrast); font-size: 20px; cursor: pointer;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 45%, transparent);
+    transition: transform 0.15s; display: flex; align-items: center; justify-content: center;
+  }
+  .play-btn:active { transform: scale(0.92); }
+
+  .volume-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    background: var(--card); border: 1px solid var(--border-subtle); padding: 7px 12px; border-radius: 16px;
+    position: relative; z-index: 2;
+  }
+  .mute-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 0; color: var(--text); }
+  input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+
+  /* Modals */
+  .modal-overlay {
+    display: none; position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(4px); z-index: 100; justify-content: center; align-items: flex-end; padding: 0;
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  .modal-overlay.open { display: flex; opacity: 1; }
+  .modal-card {
+    background: #050505; width: 100%; border-radius: 28px 28px 0 0; padding: 20px;
+    border-top: 1.5px solid color-mix(in srgb, var(--accent) 40%, var(--border-subtle));
+    max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    transform: translateY(100%); transition: transform 0.35s cubic-bezier(0.1, 1, 0.1, 1);
+  }
+  .modal-overlay.open .modal-card { transform: translateY(0); }
+  @media (min-width: 768px) {
+    .modal-overlay { align-items: center; padding: 20px; }
+    .modal-card { border-radius: 28px; max-width: 500px; max-height: 85vh; }
+  }
+
+  .modal-card::-webkit-scrollbar { width: 4px; }
+  .modal-card::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 10px; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; }
+  .modal-header h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  
+  .setting-group {
+    background: var(--item); padding: 12px; border-radius: 18px; border: 1px solid var(--border-subtle);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .setting-group-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--accent); }
+  .setting-row { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 500; gap: 10px; }
+  .setting-desc { font-size: 10.5px; color: var(--subtext); margin-top: 2px; line-height: 1.3; }
+  
+  .color-picker-wrapper { display: flex; align-items: center; gap: 8px; }
+  input[type="color"] {
+    -webkit-appearance: none; border: none; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; background: none;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: 2px solid var(--border-subtle); border-radius: 50%; }
+
+  .timer-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .timer-btn {
+    padding: 5px 10px; border-radius: 10px; border: 1px solid var(--border-subtle); cursor: pointer; font-size: 11.5px;
+    background: var(--card); color: var(--text); font-weight: 600;
+  }
+  .timer-btn.active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .input-field {
+    width: 100%; padding: 10px 13px; border-radius: 14px; border: 1px solid var(--border-subtle);
+    background: var(--card); color: var(--text); font-size: 12.5px; outline: none;
+  }
+  .input-field:focus { border-color: var(--accent); }
+  .primary-btn {
+    background: var(--accent); color: var(--accent-contrast); border: none; padding: 11px;
+    border-radius: 14px; font-weight: bold; cursor: pointer; font-size: 13.5px; width: 100%;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .primary-btn:hover { opacity: 0.9; }
+  .primary-btn:active { transform: scale(0.97); }
+  .danger-btn {
+    background: rgba(239, 68, 68, 0.14); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35);
+    padding: 9px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 12.5px; width: 100%;
+  }
+  .danger-btn:hover { background: rgba(239, 68, 68, 0.25); }
+  input[type="checkbox"] { accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="ambient-bg" id="ambientBg"></div>
+
+  <div class="header">
+    <h2>📻 Türkiye Radyoları</h2>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="toggleFavDrawer()" title="Favoriler Menüsü">⭐</button>
+      <button class="icon-btn" onclick="openModal('addModal')" title="Özel Kanal Ekle">➕</button>
+      <button class="icon-btn" onclick="openModal('settingsModal')" title="Ayarlar">⚙️</button>
+    </div>
+  </div>
+
+  <div class="quick-favs-container" id="quickFavsContainer">
+    <div class="quick-favs" id="quickFavsBar"></div>
+  </div>
+
+  <input type="text" class="search-box" id="searchInput" placeholder="🔍 Radyo ara (örn: Kral, Power, TRT, Slow...)" oninput="resetPaginationAndRender()">
+
+  <div class="pills-row" id="categoryPills">
+    <button class="pill active" onclick="setCategory('all', this)">Tümü</button>
+    <button class="pill" onclick="setCategory('pop', this)">Pop</button>
+    <button class="pill" onclick="setCategory('sanat', this)">Türk Sanat</button>
+    <button class="pill" onclick="setCategory('arabesk', this)">Arabesk</button>
+    <button class="pill" onclick="setCategory('slow', this)">Slow</button>
+    <button class="pill" onclick="setCategory('turku', this)">Türkü</button>
+    <button class="pill" onclick="setCategory('rock', this)">Rock</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabAll" onclick="switchTab('all')">Tüm Kanallar</button>
+    <button class="tab" id="tabFav" onclick="switchTab('fav')">⭐ Favorilerim</button>
+  </div>
+
+  <div class="station-list" id="stationList" onscroll="handleListScroll()">
+    <div style="text-align:center; color:var(--subtext); padding:20px;">Kanallar yükleniyor...</div>
+  </div>
+
+  <div class="now-playing">
+    <div class="np-top">
+      <div class="np-logo" id="npLogo">📻</div>
+      <div class="np-meta">
+        <div class="station-title" id="currentTitle">TRT Nağme</div>
+        <div class="song-subtitle" id="songSubtitle">Canlı Yayın</div>
+        <div class="station-tag">
+          <span id="statusText">Dinlemeye Hazır</span>
+          <span class="badge" id="saverBadge" style="display:none;">🍃 Tasarruf</span>
+          <span class="badge" id="timerBadge" style="display:none;">⏳ 00:00</span>
+          <span class="badge" id="dataUsageBadge" style="display:none; cursor:pointer;" onclick="resetDataCounter()" title="Sıfırlamak için tıkla">📊 0 KB</span>
+        </div>
+      </div>
+      <div class="visualizer" id="visualizer">
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+        <div class="bar"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="ctrl-sub" onclick="playPrev()" title="Önceki Kanal">⏮</button>
+      <button class="play-btn" id="playBtn" onclick="togglePlay()" title="Oynat/Duraklat">▶</button>
+      <button class="ctrl-sub" onclick="playNext()" title="Sonraki Kanal">⏭</button>
+      <button class="ctrl-sub" onclick="playRandom()" title="Rastgele Keşfet">🎲</button>
+      <button class="ctrl-sub" onclick="resetCurrentStation()" title="Canlı Uca Git">🔄</button>
+    </div>
+
+    <div class="volume-row">
+      <button class="mute-btn" id="muteBtn" onclick="toggleMute()" title="Sessiz">🔈</button>
+      <input type="range" id="volumeSlider" min="0" max="1" step="0.01" value="0.8" oninput="setVolume(this.value)">
+      <span>🔊</span>
+    </div>
+  </div>
+
+  <!-- AYARLAR MODALI -->
+  <div class="modal-overlay" id="settingsModal" onclick="closeModalOnBg(event, 'settingsModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙️ Gelişmiş Ayarlar</h3>
+        <button class="icon-btn" onclick="closeModal('settingsModal')">✕</button>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">🔋 1. Güç Tasarrufu ve Performans</div>
+        
+        <div class="setting-row">
+          <div>
+            <div>Veri Tasarrufu Modu</div>
+            <div class="setting-desc">Logoları gizler ve seçilen düşük bitrate ile bulut sıkıştırmayı etkinleştirir</div>
+          </div>
+          <input type="checkbox" id="dataSaverCheck" onchange="toggleSetting('dataSaver', this.checked)">
+        </div>
+
+        <div id="compressionSettingsBox" style="display:flex; flex-direction:column; gap:8px; opacity:0.5;">
+          <div style="font-size:11.5px; font-weight:600;">Sıkıştırma Bitrate Kalitesi:</div>
+          <div class="timer-btns" id="bitrateBtns">
+            <button class="timer-btn" data-br="12k" onclick="setProxyBitrate('12k')">12 kbps</button>
+            <button class="timer-btn" data-br="24k" onclick="setProxyBitrate('24k')">24 kbps</button>
+            <button class="timer-btn active" data-br="32k" onclick="setProxyBitrate('32k')">32 kbps</button>
+            <button class="timer-btn" data-br="48k" onclick="setProxyBitrate('48k')">48 kbps</button>
+          </div>
+        </div>
+
+        <div class="setting-row" style="margin-top: 4px; border-top: 1px solid var(--border-subtle); padding-top: 8px;">
+          <div>
+            <div>CORS ve HTTP Hatalarını Aşmak İçin Proxy Kullan</div>
+            <div class="setting-desc">Yayın kalitesini değiştirmeden bağlantı sorunlarını çözer</div>
+          </div>
+          <input type="checkbox" id="alwaysProxyCheck" onchange="toggleSetting('alwaysProxy', this.checked)">
+        </div>
+
+        <div style="font-size:11px; color:var(--subtext); margin-top:2px;">Proxy / Sıkıştırma Sunucusu Adresi:</div>
+        <input type="text" class="input-field" id="proxyBaseInput" placeholder="https://radyo-proxy.onrender.com" onchange="saveProxyBase(this.value)">
+
+        <div class="setting-row" id="preferLowBitrateRow">
+          <div>
+            <div style="font-size:12px;">Proxy Kapalıysa Düşük Bitrate (≤64k) Tercih Et</div>
+          </div>
+          <input type="checkbox" id="preferLowBitrateCheck" onchange="toggleSetting('preferLowBitrate', this.checked)">
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div>📊 Anlık Veri Tüketimi Sayacı</div>
+          </div>
+          <input type="checkbox" id="showDataUsageCheck" onchange="toggleSetting('showDataUsage', this.checked)">
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">✨ 2. İsteğe Bağlı Akıllı Özellikler</div>
+        
+        <div class="setting-row">
+          <div>
+            <div>🎵 Şarkı Adı Takibi (Metadata)</div>
+            <div class="setting-desc">Destekleyen kanallarda çalan şarkıyı gösterir</div>
+          </div>
+          <input type="checkbox" id="metaCheck" onchange="toggleSetting('enableMeta', this.checked)">
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div>🌌 Ambiyans Arka Plan Efekti</div>
+            <div class="setting-desc">Oynatıcı arkasında tema rengine göre nefes alan derinlik süzgeci</div>
+          </div>
+          <input type="checkbox" id="ambientCheck" onchange="toggleSetting('enableAmbient', this.checked)">
+        </div>
+
+        <div class="setting-row">
+          <div>
+            <div>🎛️ Mini Ekolayzır (Bass & Treble)</div>
+            <div class="setting-desc">Ses frekanslarını (- ve + yönde) optimize eder</div>
+          </div>
+          <input type="checkbox" id="eqCheck" onchange="toggleSetting('enableEQ', this.checked)">
+        </div>
+
+        <div id="eqSettingsBox" style="display:flex; flex-direction:column; gap:10px; opacity:0.5; padding-top:4px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:3px;">
+              <span style="color:var(--subtext);">Bass (-12 dB ile +12 dB):</span>
+              <span id="bassGainLabel" style="color:var(--accent); font-weight:bold;">0 dB</span>
+            </div>
+            <input type="range" id="bassGainSlider" min="-12" max="12" step="0.5" value="0" disabled oninput="setBassGain(this.value)">
+          </div>
+          <div>
+            <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:3px;">
+              <span style="color:var(--subtext);">Treble / Tiz (-12 dB ile +12 dB):</span>
+              <span id="trebleGainLabel" style="color:var(--accent); font-weight:bold;">0 dB</span>
+            </div>
+            <input type="range" id="trebleGainSlider" min="-12" max="12" step="0.5" value="0" disabled oninput="setTrebleGain(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">🎧 3. Oynatma ve Deneyim</div>
+        <div class="setting-row">
+          <div><div>💾 Son Dinlenen Kanalı Hatırla</div></div>
+          <input type="checkbox" id="rememberLastCheck" onchange="toggleSetting('rememberLast', this.checked)">
+        </div>
+        <div class="setting-row">
+          <div><div>⚡ Otomatik Yeniden Bağlan</div></div>
+          <input type="checkbox" id="autoReconnectCheck" onchange="toggleSetting('autoReconnect', this.checked)">
+        </div>
+        <div class="setting-row">
+          <div><div>⚠️ Çalışmayan Kanalları Gizle</div></div>
+          <input type="checkbox" id="hideDeadCheck" onchange="toggleSetting('hideDead', this.checked)">
+        </div>
+        <div class="setting-row">
+          <div><div>⌨️ Klavye Kısayolları (PC)</div></div>
+          <input type="checkbox" id="keyboardShortcutsCheck" onchange="toggleSetting('keyboardShortcuts', this.checked)">
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">⏳ 4. Uyku Zamanlayıcısı</div>
+        <div class="setting-row">
+          <div>Otomatik Kapanma</div>
+          <span id="timerStatusLabel" style="font-size:11.5px; color:var(--accent); font-weight:bold;">Kapalı</span>
+        </div>
+        <div class="timer-btns">
+          <button class="timer-btn" onclick="setSleepTimer(0)">Kapat</button>
+          <button class="timer-btn" onclick="setSleepTimer(15)">15 dk</button>
+          <button class="timer-btn" onclick="setSleepTimer(30)">30 dk</button>
+          <button class="timer-btn" onclick="setSleepTimer(45)">45 dk</button>
+          <button class="timer-btn" onclick="setSleepTimer(60)">60 dk</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">🎨 5. Görünüm ve Özel Tema Rengi</div>
+        <div class="setting-row">
+          <div>
+            <div>Özel Vurgu Rengi Seç</div>
+            <div class="setting-desc">Tüm uygulamanın tema rengini kişiselleştir</div>
+          </div>
+          <div class="color-picker-wrapper">
+            <input type="color" id="accentColorPicker" value="#d84315" onchange="setColor(this.value)">
+          </div>
+        </div>
+        <div class="setting-row">
+          <span>🌓 Aydınlık Tema</span>
+          <input type="checkbox" id="lightModeCheck" onchange="toggleMode(this.checked)">
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">🛠️ 6. Bakım ve Önbellek</div>
+        <div style="display:flex; gap:8px;">
+          <button class="timer-btn" style="flex:1; padding:9px;" onclick="resetCurrentStation(); closeModal('settingsModal');">🔄 Kanalı Sıfırla</button>
+          <button class="danger-btn" style="flex:1;" onclick="resetAllStations()">🗑️ Listeyi Sıfırla</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ÖZEL KANAL EKLEME MODALI -->
+  <div class="modal-overlay" id="addModal" onclick="closeModalOnBg(event, 'addModal')">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>➕ Özel Radyo Kanalı Ekle</h3>
+        <button class="icon-btn" onclick="closeModal('addModal')">✕</button>
+      </div>
+      <input type="text" class="input-field" id="customName" placeholder="Kanal Adı (örn: Özel TSM Radyo)">
+      <input type="text" class="input-field" id="customUrl" placeholder="Yayın Linki (.m3u8 veya .mp3)">
+      <input type="text" class="input-field" id="customTag" placeholder="Tür (örn: Türk Sanat Müziği)">
+      <button class="primary-btn" onclick="addCustomStation()">Listeye Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" crossorigin="anonymous"></audio>
+
+<script>
+  const audio = document.getElementById('audio');
+  const playBtn = document.getElementById('playBtn');
+  const statusText = document.getElementById('statusText');
+  const currentTitle = document.getElementById('currentTitle');
+  const songSubtitle = document.getElementById('songSubtitle');
+  const npLogo = document.getElementById('npLogo');
+  const visualizer = document.getElementById('visualizer');
+  const ambientBg = document.getElementById('ambientBg');
+
+  let hls = null;
+  let isPlaying = false;
+  let isHlsActive = false;
+  let isSwitching = false;
+  let currentTab = 'all';
+  let selectedCategory = 'all';
+  let visibleLimit = 45;
+  let filteredCache = [];
+
+  let audioCtx = null;
+  let sourceNode = null;
+  let bassFilter = null;
+  let trebleFilter = null;
+
+  let reconnectTimer = null;
+  let deadLinkTimer = null;
+  let fallbackMeterInterval = null;
+  let metadataCheckInterval = null;
+  let sleepInterval = null;
+  let sleepSecondsLeft = 0;
+
+  let totalBytesConsumed = 0;
+  let lastVolume = parseFloat(localStorage.getItem('savedVolume') || '0.8');
+  let savedBassGain = parseFloat(localStorage.getItem('bassGain') || '0');
+  let savedTrebleGain = parseFloat(localStorage.getItem('trebleGain') || '0');
+  let deadStations = new Set(JSON.parse(localStorage.getItem('deadStations') || '[]'));
+
+  const settings = {
+    dataSaver: localStorage.getItem('dataSaver') === 'true',
+    alwaysProxy: localStorage.getItem('alwaysProxy') === 'true',
+    preferLowBitrate: localStorage.getItem('preferLowBitrate') !== 'false',
+    showDataUsage: localStorage.getItem('showDataUsage') === 'true',
+    rememberLast: localStorage.getItem('rememberLast') !== 'false',
+    autoReconnect: localStorage.getItem('autoReconnect') !== 'false',
+    hideDead: localStorage.getItem('hideDead') === 'true',
+    keyboardShortcuts: localStorage.getItem('keyboardShortcuts') !== 'false',
+    proxyBase: localStorage.getItem('proxyBase') || 'https://radyo-proxy.onrender.com',
+    proxyBitrate: localStorage.getItem('proxyBitrate') || '32k',
+    enableMeta: localStorage.getItem('enableMeta') === 'true',
+    enableAmbient: localStorage.getItem('enableAmbient') === 'true',
+    enableEQ: localStorage.getItem('enableEQ') === 'true'
+  };
+
+  const defaultStations = [
+    { id: 'trt-nagme', name: 'TRT Nağme', url: 'https://rd-trtnagme.medya.trt.com.tr/master_128.m3u8', lowUrl: '', tags: 'Türk Sanat Müziği', bitrate: 128, lowBitrate: 0, favicon: '' },
+    { id: 'trt-turku', name: 'TRT Türkü', url: 'https://rd-trtturku.medya.trt.com.tr/master_128.m3u8', lowUrl: '', tags: 'Türk Halk Müziği, Türkü', bitrate: 128, lowBitrate: 0, favicon: '' },
+    { id: 'trt-fm', name: 'TRT FM', url: 'https://rd-trtfm.medya.trt.com.tr/master_128.m3u8', lowUrl: '', tags: 'Pop, Türkçe Müzik', bitrate: 128, lowBitrate: 0, favicon: '' },
+    { id: 'trt-radyo3', name: 'TRT Radyo 3', url: 'https://rd-trtradyo3.medya.trt.com.tr/master_128.m3u8', lowUrl: '', tags: 'Klasik, Caz, Rock', bitrate: 128, lowBitrate: 0, favicon: '' }
+  ];
+
+  let customStations = JSON.parse(localStorage.getItem('customStations') || '[]');
+  let stations = [...customStations, ...defaultStations];
+  let activeStation = stations[0];
+  let favorites = JSON.parse(localStorage.getItem('favStations') || '["trt-nagme"]');
+
+  function initApp() {
+    const savedAccent = localStorage.getItem('accent') || '#d84315';
+    setColor(savedAccent);
+    document.getElementById('accentColorPicker').value = savedAccent;
+
+    if (localStorage.getItem('light') === 'true') {
+      document.body.classList.add('light');
+      document.getElementById('lightModeCheck').checked = true;
+    }
+
+    document.getElementById('dataSaverCheck').checked = settings.dataSaver;
+    document.getElementById('alwaysProxyCheck').checked = settings.alwaysProxy;
+    document.getElementById('preferLowBitrateCheck').checked = settings.preferLowBitrate;
+    document.getElementById('showDataUsageCheck').checked = settings.showDataUsage;
+    document.getElementById('rememberLastCheck').checked = settings.rememberLast;
+    document.getElementById('autoReconnectCheck').checked = settings.autoReconnect;
+    document.getElementById('hideDeadCheck').checked = settings.hideDead;
+    document.getElementById('keyboardShortcutsCheck').checked = settings.keyboardShortcuts;
+    document.getElementById('proxyBaseInput').value = settings.proxyBase;
+
+    document.getElementById('metaCheck').checked = settings.enableMeta;
+    document.getElementById('ambientCheck').checked = settings.enableAmbient;
+    document.getElementById('eqCheck').checked = settings.enableEQ;
+
+    document.getElementById('bassGainSlider').value = savedBassGain;
+    document.getElementById('bassGainLabel').innerText = savedBassGain + ' dB';
+    document.getElementById('trebleGainSlider').value = savedTrebleGain;
+    document.getElementById('trebleGainLabel').innerText = savedTrebleGain + ' dB';
+
+    updateBitrateButtonsUI();
+    audio.volume = lastVolume;
+    document.getElementById('volumeSlider').value = lastVolume;
+
+    updateDataSaverUI();
+    updateDataUsageBadge();
+    updateAmbientUI();
+    updateEQUI();
+    loadTurkishRadios(false);
+  }
+
+  function toggleFavDrawer() {
+    document.getElementById('quickFavsContainer').classList.toggle('open');
+  }
+
+  function clearAllStreamTimers() {
+    clearTimeout(reconnectTimer);
+    clearTimeout(deadLinkTimer);
+    clearInterval(fallbackMeterInterval);
+    clearInterval(metadataCheckInterval);
+  }
+
+  function sanitizeFavicon(url) {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (!trimmed.startsWith('https://') || trimmed.includes('null') || trimmed.includes('undefined') || trimmed.includes(' ')) return '';
+    return trimmed;
+  }
+
+  function normalizeName(name) {
+    return (name || '').toLowerCase().replace(/[^a-zçğıöşü0-9]/g, '');
+  }
+
+  async function loadTurkishRadios(forceRefresh = false) {
+    const listEl = document.getElementById('stationList');
+    const cachedRaw = localStorage.getItem('cachedStationsData');
+    const cachedTime = parseInt(localStorage.getItem('cachedStationsTime') || '0', 10);
+    const isCacheValid = !forceRefresh && cachedRaw && (Date.now() - cachedTime < 24 * 60 * 60 * 1000);
+
+    if (isCacheValid) {
+      const cachedList = JSON.parse(cachedRaw);
+      mergeStations(cachedList);
+      restoreLastStation();
+      resetPaginationAndRender();
+      renderQuickFavs();
+      return;
+    }
+
+    if (forceRefresh) {
+      listEl.innerHTML = '<div style="text-align:center; color:var(--subtext); padding:20px;">Liste sıfırlanıyor, kanallar çekiliyor...</div>';
+    }
+
+    const mirrors = [
+      'https://de1.api.radio-browser.info',
+      'https://at1.api.radio-browser.info',
+      'https://nl1.api.radio-browser.info'
+    ];
+
+    for (const mirror of mirrors) {
+      try {
+        const res = await fetch(`${mirror}/json/stations/bycountrycodeexact/TR?limit=450&order=votes&reverse=true`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const excluded = ['haber', 'news', 'spor', 'sport', 'kuran', 'quran', 'talk'];
+        const groupedMap = new Map();
+
+        data.forEach(st => {
+          const nameLower = (st.name || '').toLowerCase();
+          const tagsLower = (st.tags || '').toLowerCase();
+          const isExcluded = excluded.some(word => nameLower.includes(word) || tagsLower.includes(word));
+          if (isExcluded || !st.url_resolved) return;
+
+          const key = normalizeName(st.name);
+          if (!key) return;
+          const br = st.bitrate || 128;
+
+          if (!groupedMap.has(key)) {
+            groupedMap.set(key, {
+              id: st.stationuuid,
+              name: st.name.trim(),
+              url: st.url_resolved,
+              lowUrl: (br > 0 && br <= 64) ? st.url_resolved : '',
+              tags: st.tags ? st.tags.split(',').slice(0, 3).join(', ') : 'Müzik',
+              bitrate: br,
+              lowBitrate: (br > 0 && br <= 64) ? br : 0,
+              favicon: sanitizeFavicon(st.favicon)
+            });
+          } else {
+            const existing = groupedMap.get(key);
+            if (!existing.favicon && st.favicon) existing.favicon = sanitizeFavicon(st.favicon);
+
+            if (br > 0 && br <= 64) {
+              if (!existing.lowUrl || br < existing.lowBitrate) {
+                existing.lowUrl = st.url_resolved;
+                existing.lowBitrate = br;
+              }
+            } else if (br > existing.bitrate) {
+              existing.url = st.url_resolved;
+              existing.bitrate = br;
+            }
+          }
+        });
+
+        const parsed = Array.from(groupedMap.values());
+        localStorage.setItem('cachedStationsData', JSON.stringify(parsed));
+        localStorage.setItem('cachedStationsTime', String(Date.now()));
+        mergeStations(parsed);
+        break;
+      } catch (e) {}
+    }
+
+    restoreLastStation();
+    resetPaginationAndRender();
+    renderQuickFavs();
+  }
+
+  function mergeStations(apiList) {
+    stations = [...customStations, ...defaultStations];
+    apiList.forEach(st => {
+      if (!stations.some(s => normalizeName(s.name) === normalizeName(st.name))) {
+        stations.push(st);
+      }
+    });
+  }
+
+  function restoreLastStation() {
+    if (!settings.rememberLast) return;
+    const savedId = localStorage.getItem('lastStationId');
+    if (savedId) {
+      const found = stations.find(s => s.id === savedId);
+      if (found) {
+        activeStation = found;
+        currentTitle.innerText = found.name;
+        updateNowPlayingLogo(found);
+      }
+    }
+  }
+
+  function playStationById(id) {
+    const st = stations.find(s => s.id === id);
+    if (st) playStation(st);
+  }
+
+  function isCompressionActive() {
+    return settings.dataSaver && settings.proxyBase && settings.proxyBase.startsWith('http');
+  }
+
+  function isProxyActive() {
+    return settings.alwaysProxy && settings.proxyBase && settings.proxyBase.startsWith('http');
+  }
+
+  function buildStreamUrl(rawUrl, forceCompression = false) {
+    const cleanBase = settings.proxyBase.replace(/\/+$/, '');
+    if (forceCompression) {
+      return `${cleanBase}/?br=${settings.proxyBitrate}&url=${encodeURIComponent(rawUrl)}`;
+    }
+    return `${cleanBase}/?url=${encodeURIComponent(rawUrl)}`;
+  }
+
+  function setupAudioContext() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sourceNode = audioCtx.createMediaElementSource(audio);
+        
+        bassFilter = audioCtx.createBiquadFilter();
+        bassFilter.type = 'lowshelf';
+        bassFilter.frequency.setValueAtTime(200, audioCtx.currentTime);
+        bassFilter.gain.setValueAtTime(settings.enableEQ ? savedBassGain : 0, audioCtx.currentTime);
+
+        trebleFilter = audioCtx.createBiquadFilter();
+        trebleFilter.type = 'highshelf';
+        trebleFilter.frequency.setValueAtTime(3000, audioCtx.currentTime);
+        trebleFilter.gain.setValueAtTime(settings.enableEQ ? savedTrebleGain : 0, audioCtx.currentTime);
+
+        sourceNode.connect(bassFilter);
+        bassFilter.connect(trebleFilter);
+        trebleFilter.connect(audioCtx.destination);
+      } catch (e) {}
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function setBassGain(val) {
+    savedBassGain = parseFloat(val);
+    document.getElementById('bassGainLabel').innerText = savedBassGain + ' dB';
+    localStorage.setItem('bassGain', String(savedBassGain));
+    if (bassFilter && audioCtx && settings.enableEQ) {
+      bassFilter.gain.setValueAtTime(savedBassGain, audioCtx.currentTime);
+    }
+  }
+
+  function setTrebleGain(val) {
+    savedTrebleGain = parseFloat(val);
+    document.getElementById('trebleGainLabel').innerText = savedTrebleGain + ' dB';
+    localStorage.setItem('trebleGain', String(savedTrebleGain));
+    if (trebleFilter && audioCtx && settings.enableEQ) {
+      trebleFilter.gain.setValueAtTime(savedTrebleGain, audioCtx.currentTime);
+    }
+  }
+
+  function playStation(station, forceDirectStream = false) {
+    if (isSwitching) return;
+    isSwitching = true;
+    setTimeout(() => { isSwitching = false; }, 800);
+
+    clearAllStreamTimers();
+    activeStation = station;
+    if (settings.rememberLast) localStorage.setItem('lastStationId', station.id);
+
+    currentTitle.innerText = station.name;
+    songSubtitle.innerText = station.tags || "Canlı Radyo Yayını";
+    songSubtitle.classList.add('active');
+
+    updateNowPlayingLogo(station);
+    renderVisibleList();
+    renderQuickFavs();
+
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    if (hls) {
+      hls.destroy();
+      hls = null;
+    }
+    isHlsActive = false;
+
+    const compressing = !forceDirectStream && isCompressionActive();
+    
+    // TRT gibi .m3u8 (HLS) yayınları proxy modunda parça çekemediği için baypas edilir
+    const isHlsStream = station.url.includes('.m3u8');
+    const usingProxyOnly = !forceDirectStream && !compressing && isProxyActive() && !isHlsStream;
+    
+    const useLowStream = !compressing && !usingProxyOnly && !forceDirectStream && settings.preferLowBitrate && Boolean(station.lowUrl);
+    
+    let streamToPlay = station.url;
+    if (compressing) {
+      streamToPlay = buildStreamUrl(station.url, true);
+    } else if (usingProxyOnly) {
+      streamToPlay = buildStreamUrl(station.url, false);
+    } else if (useLowStream) {
+      streamToPlay = station.lowUrl;
+    }
+
+    statusText.innerText = (compressing || usingProxyOnly) ? "Proxy sunucusuna bağlanılıyor..." : "Bağlanıyor...";
+
+    const handleStreamFailure = () => {
+      if (compressing || usingProxyOnly) {
+        onPlayError("Proxy bağlantısı zaman aşımına uğradı");
+        return;
+      }
+      if (useLowStream && station.url && station.url !== station.lowUrl) {
+        playStation(station, true);
+        return;
+      }
+      onPlayError();
+    };
+
+    const timeoutMs = (compressing || usingProxyOnly) ? 45000 : 10000;
+
+    deadLinkTimer = setTimeout(() => {
+      if (!isPlaying) {
+        handleStreamFailure();
+      }
+    }, timeoutMs);
+
+    if (!compressing && streamToPlay.includes('.m3u8') && Hls.isSupported()) {
+      isHlsActive = true;
+      hls = new Hls({
+        startLevel: -1,
+        capLevelToPlayerSize: false,
+        maxBufferLength: 25,
+        maxMaxBufferLength: 40
+      });
+
+      hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+        if (data && data.frag && data.frag.stats) {
+          const loadedBytes = data.frag.stats.total || data.frag.stats.loaded || 0;
+          totalBytesConsumed += loadedBytes;
+          updateDataUsageBadge();
+        }
+      });
+
+      hls.loadSource(streamToPlay);
+      hls.attachMedia(audio);
+      hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+        setupAudioContext();
+        audio.play().then(() => onPlaySuccess(false, false, usingProxyOnly)).catch(handleStreamFailure);
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) handleStreamFailure();
+      });
+    } else {
+      audio.src = streamToPlay;
+      setupAudioContext();
+      audio.play().then(() => {
+        onPlaySuccess(useLowStream, compressing, usingProxyOnly);
+        startFallbackMeter(station, useLowStream, compressing);
+      }).catch(handleStreamFailure);
+    }
+
+    audio.onerror = () => {
+      handleStreamFailure();
+    };
+
+    updateMediaSession(station);
+    if (settings.enableMeta) fetchMetadata(station);
+  }
+
+  function fetchMetadata(station) {
+    if (!settings.enableMeta) return;
+    metadataCheckInterval = setInterval(async () => {
+      if (!isPlaying) return;
+      try {
+        const res = await fetch(`https://de1.api.radio-browser.info/json/stations/byuuid/${station.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data[0]) {
+            const rawInfo = data[0].name || station.name;
+            if (rawInfo) {
+              songSubtitle.innerText = rawInfo;
+              songSubtitle.classList.add('active');
+            }
+          }
+        }
+      } catch (e) {
+        songSubtitle.innerText = station.tags || "Canlı Yayın";
+      }
+    }, 15000);
+  }
+
+  function onPlaySuccess(isLowStream = false, isCompressing = false, isProxyOnly = false) {
+    clearTimeout(deadLinkTimer);
+    if (deadStations.has(activeStation.id)) {
+      deadStations.delete(activeStation.id);
+      localStorage.setItem('deadStations', JSON.stringify([...deadStations]));
+    }
+    isPlaying = true;
+    playBtn.innerText = "⏸";
+    visualizer.classList.add('active');
+
+    if (isCompressing) {
+      statusText.innerText = `Canlı (Veri Tasarrufu: ${settings.proxyBitrate.replace('k', ' kbps')})`;
+    } else if (isProxyOnly) {
+      statusText.innerText = "Canlı (Proxy Aktif - Orijinal Kalite)";
+    } else if (isLowStream) {
+      statusText.innerText = `Canlı (${activeStation.lowBitrate || 64} kbps Düşük Bitrate)`;
+    } else {
+      statusText.innerText = "Canlı Yayın Çalıyor";
+    }
+
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+  }
+
+  function onPlayError(customMsg) {
+    clearAllStreamTimers();
+    isPlaying = false;
+    playBtn.innerText = "▶";
+    visualizer.classList.remove('active');
+    if (settings.autoReconnect) {
+      statusText.innerText = "Bağlantı koptu, yeniden deneniyor...";
+      reconnectTimer = setTimeout(() => playStation(activeStation), 3500);
+    } else {
+      statusText.innerText = customMsg || "Yayın alınamadı (🔄 ile sıfırla)";
+    }
+  }
+
+  function togglePlay() {
+    if (isPlaying) {
+      clearAllStreamTimers();
+      audio.pause();
+      if (hls) { hls.destroy(); hls = null; }
+      isPlaying = false;
+      playBtn.innerText = "▶";
+      visualizer.classList.remove('active');
+      statusText.innerText = "Duraklatıldı";
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    } else {
+      playStation(activeStation);
+    }
+  }
+
+  function resetCurrentStation() {
+    clearAllStreamTimers();
+    statusText.innerText = "Canlı uca bağlanılıyor...";
+    playStation(activeStation);
+  }
+
+  function resetAllStations() {
+    clearAllStreamTimers();
+    if (hls) { hls.destroy(); hls = null; }
+    audio.pause();
+    isPlaying = false;
+    playBtn.innerText = "▶";
+    visualizer.classList.remove('active');
+
+    localStorage.removeItem('cachedStationsData');
+    localStorage.removeItem('cachedStationsTime');
+    localStorage.removeItem('deadStations');
+    deadStations.clear();
+
+    stations = [...customStations, ...defaultStations];
+    activeStation = stations[0];
+    currentTitle.innerText = activeStation.name;
+    statusText.innerText = "Liste sıfırlandı";
+    document.getElementById('searchInput').value = '';
+    selectedCategory = 'all';
+    document.querySelectorAll('.pill').forEach((p, idx) => p.classList.toggle('active', idx === 0));
+
+    closeModal('settingsModal');
+    loadTurkishRadios(true);
+  }
+
+  function playNext() {
+    const pool = filteredCache.length > 0 ? filteredCache : stations;
+    const idx = pool.findIndex(s => s.id === activeStation.id);
+    playStation(pool[(idx + 1) % pool.length]);
+  }
+
+  function playPrev() {
+    const pool = filteredCache.length > 0 ? filteredCache : stations;
+    const idx = pool.findIndex(s => s.id === activeStation.id);
+    playStation(pool[(idx - 1 + pool.length) % pool.length]);
+  }
+
+  function playRandom() {
+    const pool = (filteredCache.length > 0 ? filteredCache : stations).filter(s => !deadStations.has(s.id));
+    if (pool.length === 0) return;
+    playStation(pool[Math.floor(Math.random() * pool.length)]);
+  }
+
+  function setVolume(val) {
+    const v = Math.max(0, Math.min(1, parseFloat(val)));
+    audio.volume = v;
+    document.getElementById('volumeSlider').value = v;
+    if (v > 0) {
+      lastVolume = v;
+      localStorage.setItem('savedVolume', String(v));
+      document.getElementById('muteBtn').innerText = '🔈';
+    } else {
+      document.getElementById('muteBtn').innerText = '🔇';
+    }
+  }
+
+  function toggleMute() {
+    if (audio.volume > 0) setVolume(0);
+    else setVolume(lastVolume || 0.8);
+  }
+
+  function startFallbackMeter(station, isLowStream, isCompressing) {
+    clearInterval(fallbackMeterInterval);
+    let kbps = station.bitrate || 128;
+    if (isCompressing) kbps = parseInt(settings.proxyBitrate, 10) || 32;
+    else if (isLowStream) kbps = station.lowBitrate || 64;
+    const bytesPerSecond = (kbps * 1000) / 8;
+    fallbackMeterInterval = setInterval(() => {
+      if (isPlaying && !isHlsActive) {
+        totalBytesConsumed += bytesPerSecond;
+        updateDataUsageBadge();
+      }
+    }, 1000);
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  function updateDataUsageBadge() {
+    const badge = document.getElementById('dataUsageBadge');
+    badge.style.display = settings.showDataUsage ? 'inline-flex' : 'none';
+    badge.innerText = `📊 ${formatBytes(totalBytesConsumed)}`;
+  }
+
+  function resetDataCounter() {
+    totalBytesConsumed = 0;
+    updateDataUsageBadge();
+  }
+
+  function updateMediaSession(station) {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: station.name,
+        artist: station.tags || 'Canlı Radyo',
+        album: 'Türkiye Radyoları',
+        artwork: (!settings.dataSaver && station.favicon) ? [{ src: station.favicon, sizes: '128x128', type: 'image/png' }] : []
+      });
+      navigator.mediaSession.setActionHandler('play', togglePlay);
+      navigator.mediaSession.setActionHandler('pause', togglePlay);
+      navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+      navigator.mediaSession.setActionHandler('nexttrack', playNext);
+    }
+  }
+
+  function updateNowPlayingLogo(station) {
+    if (!settings.dataSaver && station.favicon) {
+      const img = new Image();
+      img.onload = () => {
+        npLogo.innerHTML = `<img src="${station.favicon}" style="width:100%;height:100%;border-radius:16px;object-fit:cover;">`;
+      };
+      img.onerror = () => { npLogo.innerText = '📻'; };
+      img.src = station.favicon;
+    } else {
+      npLogo.innerText = '📻';
+    }
+  }
+
+  function saveProxyBase(val) {
+    settings.proxyBase = val.trim();
+    localStorage.setItem('proxyBase', settings.proxyBase);
+    resetPaginationAndRender();
+    if (isPlaying && (isCompressionActive() || isProxyActive())) playStation(activeStation);
+  }
+
+  function setProxyBitrate(br) {
+    settings.proxyBitrate = br;
+    localStorage.setItem('proxyBitrate', br);
+    updateBitrateButtonsUI();
+    resetPaginationAndRender();
+    if (isPlaying && isCompressionActive()) playStation(activeStation);
+  }
+
+  function updateBitrateButtonsUI() {
+    document.querySelectorAll('#bitrateBtns .timer-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.br === settings.proxyBitrate);
+    });
+  }
+
+  function toggleSetting(key, val) {
+    if (key === 'dataSaver' && val) {
+      settings.alwaysProxy = false;
+      localStorage.setItem('alwaysProxy', 'false');
+      document.getElementById('alwaysProxyCheck').checked = false;
+    } else if (key === 'alwaysProxy' && val) {
+      settings.dataSaver = false;
+      localStorage.setItem('dataSaver', 'false');
+      document.getElementById('dataSaverCheck').checked = false;
+      updateDataSaverUI();
+    }
+
+    settings[key] = val;
+    localStorage.setItem(key, String(val));
+
+    if (key === 'dataSaver') {
+      updateDataSaverUI();
+      updateNowPlayingLogo(activeStation);
+      resetPaginationAndRender();
+      if (isPlaying) playStation(activeStation);
+    } else if (key === 'alwaysProxy') {
+      resetPaginationAndRender();
+      if (isPlaying) playStation(activeStation);
+    } else if (key === 'preferLowBitrate') {
+      resetPaginationAndRender();
+      if (isPlaying && !settings.dataSaver && !settings.alwaysProxy) playStation(activeStation);
+    } else if (key === 'hideDead') {
+      resetPaginationAndRender();
+    } else if (key === 'showDataUsage') {
+      updateDataUsageBadge();
+    } else if (key === 'enableAmbient') {
+      updateAmbientUI();
+    } else if (key === 'enableEQ') {
+      updateEQUI();
+      if (val) {
+        setupAudioContext();
+        if (bassFilter && audioCtx) {
+          bassFilter.gain.setValueAtTime(savedBassGain, audioCtx.currentTime);
+          trebleFilter.gain.setValueAtTime(savedTrebleGain, audioCtx.currentTime);
+        }
+      } else {
+        if (bassFilter && audioCtx) {
+          bassFilter.gain.setValueAtTime(0, audioCtx.currentTime);
+          trebleFilter.gain.setValueAtTime(0, audioCtx.currentTime);
+        }
+      }
+    } else if (key === 'enableMeta') {
+      if (val && isPlaying) fetchMetadata(activeStation);
+      else {
+        songSubtitle.classList.remove('active');
+        songSubtitle.innerText = '';
+      }
+    }
+  }
+
+  function updateDataSaverUI() {
+    const compBox = document.getElementById('compressionSettingsBox');
+    compBox.style.opacity = settings.dataSaver ? '1' : '0.45';
+  }
+
+  function updateAmbientUI() {
+    ambientBg.classList.toggle('active', settings.enableAmbient);
+    if (settings.enableAmbient) {
+      ambientBg.style.background = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+    }
+  }
+
+  function updateEQUI() {
+    const eqBox = document.getElementById('eqSettingsBox');
+    const bSlider = document.getElementById('bassGainSlider');
+    const tSlider = document.getElementById('trebleGainSlider');
+    eqBox.style.opacity = settings.enableEQ ? '1' : '0.45';
+    bSlider.disabled = !settings.enableEQ;
+    tSlider.disabled = !settings.enableEQ;
+  }
+
+  function setSleepTimer(minutes) {
+    clearInterval(sleepInterval);
+    const badge = document.getElementById('timerBadge');
+    const label = document.getElementById('timerStatusLabel');
+
+    if (minutes === 0) {
+      badge.style.display = 'none';
+      label.innerText = 'Kapalı';
+      return;
+    }
+
+    sleepSecondsLeft = minutes * 60;
+    badge.style.display = 'inline-flex';
+    updateTimerDisplay();
+
+    sleepInterval = setInterval(() => {
+      sleepSecondsLeft--;
+      updateTimerDisplay();
+      if (sleepSecondsLeft <= 0) {
+        clearInterval(sleepInterval);
+        badge.style.display = 'none';
+        label.innerText = 'Kapalı';
+        if (isPlaying) togglePlay();
+        statusText.innerText = 'Uyku zamanlayıcısı yayını kapattı';
+      }
+    }, 1000);
+  }
+
+  function updateTimerDisplay() {
+    const m = String(Math.floor(sleepSecondsLeft / 60)).padStart(2, '0');
+    const s = String(sleepSecondsLeft % 60).padStart(2, '0');
+    document.getElementById('timerBadge').innerText = `⏳ ${m}:${s}`;
+    document.getElementById('timerStatusLabel').innerText = `${m}:${s} kaldı`;
+  }
+
+  function addCustomStation() {
+    const name = document.getElementById('customName').value.trim();
+    const url = document.getElementById('customUrl').value.trim();
+    const tag = document.getElementById('customTag').value.trim() || 'Özel Kanal';
+
+    if (!name || !url) return alert('Lütfen kanal adı ve yayın linkini girin.');
+
+    const newSt = { id: 'custom-' + Date.now(), name, url, lowUrl: '', tags: tag, bitrate: 128, lowBitrate: 0, favicon: '' };
+    customStations.unshift(newSt);
+    localStorage.setItem('customStations', JSON.stringify(customStations));
+    stations.unshift(newSt);
+
+    document.getElementById('customName').value = '';
+    document.getElementById('customUrl').value = '';
+    document.getElementById('customTag').value = '';
+    closeModal('addModal');
+    resetPaginationAndRender();
+    playStation(newSt);
+  }
+
+  function setCategory(cat, btnEl) {
+    selectedCategory = cat;
+    document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    btnEl.classList.add('active');
+    resetPaginationAndRender();
+  }
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tabAll').classList.toggle('active', tab === 'all');
+    document.getElementById('tabFav').classList.toggle('active', tab === 'fav');
+    resetPaginationAndRender();
+  }
+
+  function toggleFav(e, id) {
+    e.stopPropagation();
+    favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+    localStorage.setItem('favStations', JSON.stringify(favorites));
+    resetPaginationAndRender();
+    renderQuickFavs();
+  }
+
+  function renderQuickFavs() {
+    const bar = document.getElementById('quickFavsBar');
+    const favStationsList = stations.filter(s => favorites.includes(s.id));
+    
+    if (favStationsList.length === 0) {
+      bar.innerHTML = '<div style="font-size:11px; color:var(--subtext); padding:5px;">Henüz favori eklenmedi.</div>';
+      return;
+    }
+
+    bar.innerHTML = favStationsList.map(st => {
+      const isActive = activeStation.id === st.id;
+      const avatarContent = (!settings.dataSaver && st.favicon) 
+        ? `<img src="${st.favicon}" style="width:100%;height:100%;border-radius:12px;object-fit:cover;" onerror="this.outerHTML='📻'">` 
+        : '📻';
+
+      return `
+        <div class="qf-item ${isActive ? 'active' : ''}" onclick="playStationById('${st.id}')">
+          <div class="qf-avatar">${avatarContent}</div>
+          <div class="qf-name">${st.name}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function resetPaginationAndRender() {
+    visibleLimit = 45;
+    const listEl = document.getElementById('stationList');
+    listEl.scrollTop = 0;
+    computeFilteredList();
+    renderVisibleList();
+  }
+
+  function handleListScroll() {
+    const listEl = document.getElementById('stationList');
+    if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 60) {
+      if (visibleLimit < filteredCache.length) {
+        visibleLimit += 45;
+        renderVisibleList();
+      }
+    }
+  }
+
+  function computeFilteredList() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    filteredCache = stations.filter(st => {
+      if (settings.hideDead && deadStations.has(st.id)) return false;
+      const matchesTab = currentTab === 'all' || favorites.includes(st.id);
+      const matchesQuery = st.name.toLowerCase().includes(query) || st.tags.toLowerCase().includes(query);
+      const matchesCat = selectedCategory === 'all' || st.tags.toLowerCase().includes(selectedCategory) || st.name.toLowerCase().includes(selectedCategory);
+      return matchesTab && matchesQuery && matchesCat;
+    });
+  }
+
+  function renderVisibleList() {
+    const listEl = document.getElementById('stationList');
+    if (filteredCache.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center; color:var(--subtext); padding:20px;">Uygun kanal bulunamadı.</div>';
+      return;
+    }
+
+    const slice = filteredCache.slice(0, visibleLimit);
+    listEl.innerHTML = slice.map(st => {
+      const isFav = favorites.includes(st.id);
+      const isActive = activeStation.id === st.id;
+      const isDead = deadStations.has(st.id);
+      const logoHtml = (!settings.dataSaver && st.favicon)
+        ? `<img src="${st.favicon}" class="st-avatar" loading="lazy" onerror="this.onerror=null;this.outerHTML='<div class=\\'st-avatar\\'>📻</div>'">`
+        : `<div class="st-avatar">📻</div>`;
+
+      let kbpsLabel = `${st.bitrate || 128} kbps`;
+      if (isCompressionActive()) {
+        kbpsLabel = `${settings.proxyBitrate.replace('k', ' kbps')} (Sıkıştırma)`;
+      } else if (isProxyActive()) {
+        kbpsLabel = `${st.bitrate || 128} kbps (Proxy)`;
+      } else if (!isCompressionActive() && !isProxyActive() && settings.preferLowBitrate && st.lowUrl) {
+        kbpsLabel = `${st.lowBitrate || 64} kbps (Düşük)`;
+      }
+
+      const deadBadge = isDead ? ' • ⚠️ Yanıt yok' : '';
+
+      return `
+        <div class="station-item ${isActive ? 'active' : ''} ${isDead ? 'dead' : ''}" onclick="playStationById('${st.id}')">
+          ${logoHtml}
+          <div class="station-info">
+            <div class="station-name">${st.name}</div>
+            <div class="station-genre">${st.tags} • ${kbpsLabel}${deadBadge}</div>
+          </div>
+          <button class="fav-btn" onclick="toggleFav(event, '${st.id}')" title="${isFav ? 'Favorilerden Çıkar' : 'Favorilere Ekle'}">${isFav ? '⭐' : '☆'}</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!settings.keyboardShortcuts) return;
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      togglePlay();
+    } else if (e.code === 'ArrowRight') {
+      playNext();
+    } else if (e.code === 'ArrowLeft') {
+      playPrev();
+    } else if (e.code === 'ArrowUp') {
+      e.preventDefault();
+      setVolume(audio.volume + 0.08);
+    } else if (e.code === 'ArrowDown') {
+      e.preventDefault();
+      setVolume(audio.volume - 0.08);
+    } else if (e.key.toLowerCase() === 'm') {
+      toggleMute();
+    }
+  });
+
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+  function closeModalOnBg(e, id) { if (e.target.id === id) closeModal(id); }
+
+  function setColor(hex) {
+    document.documentElement.style.setProperty('--accent', hex);
+    localStorage.setItem('accent', hex);
+
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+    const contrastColor = yiq >= 128 ? '#1a1a1a' : '#ffffff';
+    document.documentElement.style.setProperty('--accent-contrast', contrastColor);
+
+    if (settings.enableAmbient) {
+      ambientBg.style.background = hex;
+    }
+  }
+  
+  function toggleMode(isLight) {
+    document.body.classList.toggle('light', isLight);
+    localStorage.setItem('light', String(isLight));
+  }
+
+  initApp();
+</script>
+</body>
+</html>
